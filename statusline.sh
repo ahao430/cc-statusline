@@ -98,44 +98,76 @@ fi
 export CC_SESSION_ID=$(echo "$input" | jq -r '.session_id // empty')
 usage=$("$SCRIPT_DIR/statusline-usage.sh" 2>/dev/null)
 
-# --- Width-aware compression: shrink dir and branch first, keep others intact ---
-cols=$(tput cols 2>/dev/null || printf '%s' "${COLUMNS:-100}")
-case "$cols" in ''|*[!0-9]*) cols=100 ;; esac
-[ "$cols" -lt 40 ] && cols=100
+# --- Width-aware compression: skip entirely if real width unknown ---
+# Strip ANSI escape sequences for accurate width measurement.
+strip_ansi() {
+  printf '%s' "$1" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g'
+}
 
-n=0; total=0
-for s in "$display_model" "$dir" "$branch" "$ctx" "$tk" "$usage"; do
-  [ -z "$s" ] && continue
-  total=$((total + ${#s}))
-  n=$((n + 1))
-done
-total=$((total + 3 * (n > 0 ? n - 1 : 0)))
-
-# 1) Compress dir: ~/workspace/foo → ~/foo (keep tilde + basename)
-if [ "$total" -gt "$cols" ] && [ -n "$dir" ]; then
-  short=""
-  case "$dir" in
-    "~")        : ;;
-    "~/"*)      base=${dir##*/};  [ -n "$base" ] && short="~/$base" ;;
-    "/"*)       base=${dir##*/};  [ -n "$base" ] && short="/$base" ;;
-  esac
-  if [ -n "$short" ] && [ ${#short} -lt ${#dir} ]; then
-    total=$((total - ${#dir} + ${#short}))
-    dir="$short"
-  fi
-fi
-
-# 2) Truncate branch from the right: feature/foo-bar → feature…, then …
-if [ "$total" -gt "$cols" ] && [ -n "$branch" ]; then
-  over=$((total - cols))
-  if [ $(( ${#branch} - over - 1 )) -ge 1 ]; then
-    new=${branch:0:$(( ${#branch} - over - 1 ))}…
-    total=$((total - ${#branch} + ${#new}))
-    branch="$new"
+# Cell-width counter (CJK / wide chars = 2, others = 1). Falls back to char count if python3 missing.
+cell_width() {
+  local s
+  s=$(strip_ansi "$1")
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s' "$s" | python3 -c '
+import sys, unicodedata
+sys.stdout.write(str(sum(2 if unicodedata.east_asian_width(c) in ("W","F") else 1 for c in sys.stdin.read())))
+'
   else
-    new="…"
-    total=$((total - ${#branch} + 1))
-    branch="$new"
+    printf '%s' "$s" | wc -m | tr -d " \t\n"
+  fi
+}
+
+# Truncate to max cells, keeping head + tail joined by an ellipsis in the middle.
+truncate_middle() {
+  local s="$1" max="$2" len=${#1}
+  [ "$len" -le "$max" ] && { printf '%s' "$s"; return; }
+  [ "$max" -le 1 ] && { printf '…'; return; }
+  local head_n=$(( (max - 1) / 2 ))
+  local tail_n=$(( max - 1 - head_n ))
+  printf '%s…%s' "${s:0:$head_n}" "${s: -$tail_n}"
+}
+
+is_pos_int() {
+  case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac
+}
+
+# Only compress when COLUMNS is explicitly set (tput cols is unreliable in Claude Code's context).
+# Compression is opt-in: export COLUMNS=<w> in the shell that launches claude, or set via env hook.
+cols=""
+if is_pos_int "${COLUMNS:-}" && [ "${COLUMNS}" -ge 40 ]; then cols="${COLUMNS}"; fi
+
+if [ -n "$cols" ]; then
+  total=0; nparts=0
+  for s in "$display_model" "$dir" "$branch" "$ctx" "$tk" "$usage"; do
+    [ -z "$s" ] && continue
+    total=$((total + $(cell_width "$s")))
+    nparts=$((nparts + 1))
+  done
+  total=$((total + 3 * (nparts > 0 ? nparts - 1 : 0)))
+
+  if [ "$total" -gt "$cols" ]; then
+    fixed=0
+    for s in "$display_model" "$ctx" "$tk" "$usage"; do
+      [ -z "$s" ] && continue
+      fixed=$((fixed + $(cell_width "$s")))
+    done
+
+    if [ -n "$branch" ]; then
+      pair_budget=$(( cols - fixed - 6 ))   # 2 separators on each side of the pair
+    else
+      pair_budget=$(( cols - fixed - 3 ))   # 1 separator on each side
+    fi
+    [ "$pair_budget" -lt 8 ] && pair_budget=8
+
+    if [ -n "$branch" ]; then
+      half=$(( pair_budget / 2 ))
+      [ "$half" -lt 4 ] && half=4
+      dir=$(truncate_middle "$dir" "$half")
+      branch=$(truncate_middle "$branch" "$half")
+    else
+      dir=$(truncate_middle "$dir" "$pair_budget")
+    fi
   fi
 fi
 
