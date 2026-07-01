@@ -1,23 +1,24 @@
 # cc-statusline
 
-A richer Claude Code status line: model · directory · git branch · context % · **session tokens + cache hit rate** · **provider usage** (智谱 / DeepSeek / newapi relays).
+A richer Claude Code status line: model · directory · git branch · context % (with high-usage warning) · **session tokens + cache hit rate** · **provider usage** (智谱 / DeepSeek / newapi relays) — including **per-session consumption** for billing/balance providers.
 
 ```
 智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
-DeepSeek deepseek-chat | ~/proj | main | ctx 8% | tk 540k | cache 92% | ¥71.16
-claude-sonnet-4-6 | ~/proj | main | ctx 5% | tk 12k | cache 0% | $1.23 used $5.00
+智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h
+DeepSeek deepseek-chat | ~/proj | main | ctx 8% | tk 540k | cache 92% | ¥71.16 本次 -¥0.45
+claude-sonnet-4-6 | ~/proj | main | ctx 72% ⚠ 请及时压缩 | tk 480k | cache 90% | $1.23 used $5.00 本次 +$0.12
 ```
 
 ## Features
 
 - **Model** — current Claude Code model, with `智谱 ` / `DeepSeek ` prefix when the active base URL points at the official endpoint.
-- **Directory & git branch** — current dir (with `~` shortening) + branch when inside a git repo.
-- **Context %** — how full the context window is.
+- **Directory & git branch** — current dir (with `~` shortening) + branch when inside a git repo (tries `current_dir` → `project_dir` → `$PWD`).
+- **Context %** — how full the context window is. Turns red and shows `⚠ 请及时压缩` once usage crosses 60 %.
 - **Session tokens** — cumulative `input + cache_creation + cache_read + output` from the active transcript, with cache hit rate.
 - **Provider usage** — pulled from your configured provider:
-  - **智谱 GLM Coding Plan** (5h window): `剩 N% ████████ 1h33m` — remaining %, color-coded progress bar, countdown to reset. Green <60 % used, yellow <85 %, red ≥85 %.
-  - **DeepSeek official**: `¥71.16` balance.
-  - **newapi relays** (configured via ccswitch): `$1.23 used $5.00` — used / total in the relay's configured currency.
+  - **智谱 GLM Coding Plan**: each TOKENS_LIMIT window as `剩 N% ██████ 1h33m` — remaining %, color-coded progress bar (green <60 % used, yellow <85 %, red ≥85 %), countdown to reset. When both 5-hour and weekly windows exist, both are shown with labels: `5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`.
+  - **DeepSeek official**: `¥71.16 本次 -¥0.45` — current balance plus consumption since the session began.
+  - **newapi relays** (configured via ccswitch): `$1.23 used $5.00 本次 +$0.12` — used / total in the relay's configured currency (`CNY` → ¥, `USD` → $), plus consumption since session start.
 
 ## Install
 
@@ -74,7 +75,8 @@ ccswitch rewrites `~/.claude/settings.json` on every provider switch, so the sta
 
 - Cold run: ~0.7 s (mostly the provider usage HTTP call).
 - Warm (cache hit): ~0.23 s — well within Claude Code's statusLine throttle.
-- Caches: usage results 60 s per provider; session-token counts until transcript mtime/size changes.
+- Caches: provider API response 60 s per provider (display, including session deltas, is recomputed on every call so deltas stay fresh); session-token counts until transcript mtime/size changes.
+- Per-session start values stored at `~/.cache/cc-statusline/sessions/<session_id>.<key>`; auto-cleaned after 7 days.
 
 ## Layout
 

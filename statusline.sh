@@ -13,6 +13,7 @@ CCDB="${CCDB:-}"
   "$HOME/.ccswitch/cc-switch.db"; do
   [ -f "$p" ] && CCDB="$p" && break
 done
+export CCDB
 
 input=$(cat)
 
@@ -39,14 +40,24 @@ case "$dir" in
 esac
 
 project_dir=$(echo "$input" | jq -r '.workspace.project_dir // empty')
+# Try multiple candidates for git lookup — project_dir, current_dir, cwd
 branch=""
-if [ -n "$project_dir" ]; then
-  branch=$(git -C "$project_dir" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null)
-fi
+for d in "$project_dir" "$dir" "${PWD:-}"; do
+  [ -z "$d" ] && continue
+  branch=$(git -C "$d" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null) && [ -n "$branch" ] && break
+done
 
 used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 ctx=""
-[ -n "$used" ] && ctx=$(printf "ctx %.0f%%" "$used")
+ctx_color='\033[32m'
+if [ -n "$used" ]; then
+  if awk -v u="$used" 'BEGIN { exit !(u >= 60) }'; then
+    ctx=$(printf "ctx %.0f%% ⚠ 请及时压缩" "$used")
+    ctx_color='\033[31m'
+  else
+    ctx=$(printf "ctx %.0f%%" "$used")
+  fi
+fi
 
 # --- Session token accounting from transcript (cached by file mtime+size) ---
 transcript=$(echo "$input" | jq -r '.transcript_path // empty')
@@ -82,6 +93,7 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
 fi
 
 # --- Provider usage from ccswitch or env-based official detection (cached 60s) ---
+export CC_SESSION_ID=$(echo "$input" | jq -r '.session_id // empty')
 usage=$("$SCRIPT_DIR/statusline-usage.sh" 2>/dev/null)
 
 # --- Render ---
@@ -94,7 +106,7 @@ if [ -n "$branch" ]; then
 fi
 if [ -n "$ctx" ]; then
   printf " | "
-  printf "\033[32m%s\033[0m" "$ctx"
+  printf "${ctx_color}%s\033[0m" "$ctx"
 fi
 if [ -n "$tk" ]; then
   printf " | "
