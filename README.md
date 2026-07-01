@@ -1,6 +1,6 @@
 # cc-statusline
 
-Claude Code 的增强状态栏：模型 · 目录 · git 分支 · 上下文占比（超量告警）· **本次会话 token + 缓存命中率** · **渠道用量**（智谱 / DeepSeek / newapi 中转站），余额类渠道还会显示 **本次会话消耗**。
+Claude Code 的增强状态栏：模型 · 目录 · git 分支 · 上下文占比（超量告警）· **本次会话 token + 缓存命中率** · **渠道用量**（智谱 / Kimi / MiniMax / ZenMux / DeepSeek / StepFun / SiliconFlow / OpenRouter / Novita / newapi 中转站），余额类渠道还会显示 **本次会话消耗**。
 
 ```
 智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
@@ -16,8 +16,17 @@ claude-sonnet-4-6 | ~/proj | main | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% 
 - **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。
 - **会话 token** —— 从 transcript 累加 `input + cache_creation + cache_read + output`，附带缓存命中率。
 - **渠道用量** —— 按当前渠道拉取：
-  - **智谱 GLM Coding Plan**：每个 TOKENS_LIMIT 窗口显示为 `剩 N% ██████ 1h33m` —— 剩余百分比、颜色进度条（用量 <60% 绿、<85% 黄、≥85% 红）、倒计时。当 5 小时窗口和周窗口同时存在时一起显示并加标签：`5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`。
-  - **DeepSeek 官方**：`¥71.16 本次 -¥0.45` —— 当前余额 + 本次会话消耗。
+  - **套餐类（token_plan）**：每个窗口显示为 `剩 N% ██████ 1h33m` —— 剩余百分比、颜色进度条（用量 <60% 绿、<85% 黄、≥85% 红）、倒计时。多窗口时加标签：`5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`。支持：
+    - **智谱 GLM Coding Plan**（`bigmodel.cn` / `z.ai`）—— TOKENS_LIMIT 窗口（5h + 周）
+    - **Kimi For Coding**（`api.kimi.com`）—— `limits[].detail` (5h) + `usage` (周)
+    - **MiniMax**（`api.minimaxi.com` CN / `api.minimax.io` EN）—— `model_remains[general]` 5h + 周（仅 `current_weekly_status==1` 时）
+    - **ZenMux**（`zenmux` 域名）—— `quota_5_hour` + `quota_7_day`
+  - **余额类（balance）**：`¥71.16 本次 -¥0.45` —— 当前余额 + 本次会话消耗。支持：
+    - **DeepSeek**（`api.deepseek.com`）—— `balance_infos[0].total_balance`（自动识别 CNY / USD）
+    - **StepFun**（`api.stepfun.com` / `api.stepfun.ai`）—— `.balance`（CNY）
+    - **SiliconFlow CN/EN**（`api.siliconflow.cn` CNY / `api.siliconflow.com` USD）—— `.data.totalBalance`
+    - **OpenRouter**（`openrouter.ai`）—— `total_credits - total_usage`（USD）
+    - **NovitaAI**（`api.novita.ai`）—— `availableBalance / 10000`（原始单位 0.0001 USD）
   - **newapi 中转站**（经 ccswitch 配置）：`$1.23 used $5.00 本次 +$0.12` —— 已用 / 总额（按渠道 `unit` 字段自动选货币符号，`CNY` → ¥、`USD` → $）+ 本次会话消耗。
 
 ## 安装
@@ -50,7 +59,7 @@ Ubuntu/Debian：`sudo apt install jq sqlite3`
 脚本按以下优先级取渠道用量：
 
 1. **ccswitch DB**（macOS 默认在 `~/Documents/ccswitch/cc-switch.db`，外加若干 fallback 路径）。当前渠道若配了 `usage_script`，就用它。
-2. **环境变量** —— 退化到 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`（从 Claude Code 进程继承），匹配官方智谱 / DeepSeek 端点。
+2. **环境变量** —— 退化到 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`（从 Claude Code 进程继承），按 URL 关键字自动识别全部 10 个内置渠道（智谱 / Kimi / MiniMax / ZenMux / DeepSeek / StepFun / SiliconFlow / OpenRouter / Novita / newapi 不走此路径，需 ccswitch）。
 
 都没命中时，用量段静默不显示。可用 `CCDB=/path/to/cc-switch.db` 覆盖 DB 路径。
 
