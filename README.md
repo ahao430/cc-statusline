@@ -1,36 +1,36 @@
 # cc-statusline
 
-A richer Claude Code status line: model · directory · git branch · context % (with high-usage warning) · **session tokens + cache hit rate** · **provider usage** (智谱 / DeepSeek / newapi relays) — including **per-session consumption** for billing/balance providers.
+Claude Code 的增强状态栏：模型 · 目录 · git 分支 · 上下文占比（超量告警）· **本次会话 token + 缓存命中率** · **渠道用量**（智谱 / DeepSeek / newapi 中转站），余额类渠道还会显示 **本次会话消耗**。
 
 ```
 智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
 智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h
 DeepSeek deepseek-chat | ~/proj | main | ctx 8% | tk 540k | cache 92% | ¥71.16 本次 -¥0.45
-claude-sonnet-4-6 | ~/proj | main | ctx 72% ⚠ 请及时压缩 | tk 480k | cache 90% | $1.23 used $5.00 本次 +$0.12
+claude-sonnet-4-6 | ~/proj | main | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | $1.23 used $5.00 本次 +$0.12
 ```
 
-## Features
+## 功能
 
-- **Model** — current Claude Code model, with `智谱 ` / `DeepSeek ` prefix when the active base URL points at the official endpoint.
-- **Directory & git branch** — current dir (with `~` shortening) + branch when inside a git repo (tries `current_dir` → `project_dir` → `$PWD`).
-- **Context %** — how full the context window is. Turns red and shows `⚠ 请及时压缩` once usage crosses 60 %.
-- **Session tokens** — cumulative `input + cache_creation + cache_read + output` from the active transcript, with cache hit rate.
-- **Provider usage** — pulled from your configured provider:
-  - **智谱 GLM Coding Plan**: each TOKENS_LIMIT window as `剩 N% ██████ 1h33m` — remaining %, color-coded progress bar (green <60 % used, yellow <85 %, red ≥85 %), countdown to reset. When both 5-hour and weekly windows exist, both are shown with labels: `5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`.
-  - **DeepSeek official**: `¥71.16 本次 -¥0.45` — current balance plus consumption since the session began.
-  - **newapi relays** (configured via ccswitch): `$1.23 used $5.00 本次 +$0.12` — used / total in the relay's configured currency (`CNY` → ¥, `USD` → $), plus consumption since session start.
+- **模型** —— 当前 Claude Code 模型名；当激活的 baseURL 命中官方端点时，自动加 `智谱 ` / `DeepSeek ` 前缀。
+- **目录 & git 分支** —— 当前目录（`~` 缩写）+ git 分支（依次尝试 `current_dir` → `project_dir` → `$PWD`）。
+- **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。
+- **会话 token** —— 从 transcript 累加 `input + cache_creation + cache_read + output`，附带缓存命中率。
+- **渠道用量** —— 按当前渠道拉取：
+  - **智谱 GLM Coding Plan**：每个 TOKENS_LIMIT 窗口显示为 `剩 N% ██████ 1h33m` —— 剩余百分比、颜色进度条（用量 <60% 绿、<85% 黄、≥85% 红）、倒计时。当 5 小时窗口和周窗口同时存在时一起显示并加标签：`5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`。
+  - **DeepSeek 官方**：`¥71.16 本次 -¥0.45` —— 当前余额 + 本次会话消耗。
+  - **newapi 中转站**（经 ccswitch 配置）：`$1.23 used $5.00 本次 +$0.12` —— 已用 / 总额（按渠道 `unit` 字段自动选货币符号，`CNY` → ¥、`USD` → $）+ 本次会话消耗。
 
-## Install
+## 安装
 
-### One-liner
+### 一键安装
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ahao430/cc-statusline/main/install.sh | bash
 ```
 
-This copies `statusline.sh` + `statusline-usage.sh` to `~/.claude/`, makes them executable, and patches `~/.claude/settings.json` to wire them into Claude Code's `statusLine`.
+会把 `statusline.sh` 和 `statusline-usage.sh` 拷到 `~/.claude/`、赋予执行权限，并把 `~/.claude/settings.json` 的 `statusLine` 字段指向脚本。
 
-### From a clone
+### 从克隆安装
 
 ```bash
 git clone https://github.com/ahao430/cc-statusline.git
@@ -38,52 +38,52 @@ cd cc-statusline
 ./install.sh
 ```
 
-### Dependencies
+### 依赖
 
-`jq`, `sqlite3`, `curl`, `git` — install.sh checks for them and tells you what's missing.
+`jq`、`sqlite3`、`curl`、`git` —— install.sh 会检测缺失项并提示。
 
-macOS: `brew install jq sqlite3`
-Ubuntu/Debian: `sudo apt install jq sqlite3`
+macOS：`brew install jq sqlite3`
+Ubuntu/Debian：`sudo apt install jq sqlite3`
 
-## How provider usage is resolved
+## 渠道用量解析顺序
 
-The script tries sources in this order:
+脚本按以下优先级取渠道用量：
 
-1. **ccswitch DB** (`~/Documents/ccswitch/cc-switch.db` on macOS, plus a few fallback paths). If the current provider has a `usage_script` configured, use it.
-2. **Environment variables** — fall back to `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (inherited from the Claude Code process) and match against the official Zhipu / DeepSeek endpoints.
+1. **ccswitch DB**（macOS 默认在 `~/Documents/ccswitch/cc-switch.db`，外加若干 fallback 路径）。当前渠道若配了 `usage_script`，就用它。
+2. **环境变量** —— 退化到 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`（从 Claude Code 进程继承），匹配官方智谱 / DeepSeek 端点。
 
-If neither yields a usable endpoint, the usage segment is silently omitted. Override the DB path with `CCDB=/path/to/cc-switch.db` in your shell environment.
+都没命中时，用量段静默不显示。可用 `CCDB=/path/to/cc-switch.db` 覆盖 DB 路径。
 
-## ccswitch users — important
+## ccswitch 用户注意事项
 
-ccswitch rewrites `~/.claude/settings.json` on every provider switch, so the statusLine config installed by `install.sh` will be clobbered. Add this snippet to each Claude provider in ccswitch (or to ccswitch's common config):
+ccswitch 每次切换渠道都会覆盖 `~/.claude/settings.json`，install.sh 写入的 statusLine 配置会被冲掉。请在 ccswitch 里给每个 Claude 渠道（或 ccswitch 的公共配置）加上这段：
 
 ```json
 "statusLine": { "type": "command", "command": "bash ~/.claude/statusline.sh" }
 ```
 
-## Configuration
+## 配置项
 
-| Env var | Purpose | Default |
+| 环境变量 | 用途 | 默认值 |
 |---|---|---|
-| `CCDB` | Path to ccswitch SQLite DB | auto-detect |
-| `CLAUDE_DIR` | Where to install scripts | `~/.claude` |
-| `ANTHROPIC_BASE_URL` | Inference base URL (env fallback) | inherited |
-| `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` | API key (env fallback) | inherited |
+| `CCDB` | ccswitch SQLite DB 路径 | 自动探测 |
+| `CLAUDE_DIR` | 脚本安装目录 | `~/.claude` |
+| `ANTHROPIC_BASE_URL` | 推理 baseURL（环境变量兜底用） | 继承 |
+| `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` | API key（环境变量兜底用） | 继承 |
 
-## Performance
+## 性能
 
-- Cold run: ~0.7 s (mostly the provider usage HTTP call).
-- Warm (cache hit): ~0.23 s — well within Claude Code's statusLine throttle.
-- Caches: provider API response 60 s per provider (display, including session deltas, is recomputed on every call so deltas stay fresh); session-token counts until transcript mtime/size changes.
-- Per-session start values stored at `~/.cache/cc-statusline/sessions/<session_id>.<key>`; auto-cleaned after 7 days.
+- 冷启动：约 0.7 秒（主要花在拉取渠道用量的 HTTP 请求上）。
+- 缓存命中：约 0.23 秒，远低于 Claude Code 的 statusLine 节流窗口。
+- 缓存策略：渠道 API 响应按渠道缓存 60 秒（展示内容、含本次会话消耗，每次调用都重新计算，保证增量新鲜）；会话 token 按文件 mtime + size 失效。
+- 会话起始值保存在 `~/.cache/cc-statusline/sessions/<session_id>.<key>`，超过 7 天自动清理。
 
-## Layout
+## 仓库结构
 
 ```
-statusline.sh          # entry point — parses Claude Code's stdin payload
-statusline-usage.sh    # provider usage query (ccswitch DB → env fallback)
-install.sh             # installer
+statusline.sh          # 入口 —— 解析 Claude Code 的 stdin payload，渲染状态栏
+statusline-usage.sh    # 渠道用量查询（ccswitch DB → 环境变量兜底）
+install.sh             # 一键安装脚本
 ```
 
 ## License
