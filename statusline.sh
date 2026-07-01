@@ -52,7 +52,7 @@ ctx=""
 ctx_color='\033[32m'
 if [ -n "$used" ]; then
   if awk -v u="$used" 'BEGIN { exit !(u >= 60) }'; then
-    ctx=$(printf "ctx %.0f%% ⚠ 请及时压缩" "$used")
+    ctx=$(printf "ctx %.0f%% ⚠ 请压缩" "$used")
     ctx_color='\033[31m'
   else
     ctx=$(printf "ctx %.0f%%" "$used")
