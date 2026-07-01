@@ -111,16 +111,32 @@ fi
 cache_key="${pid:-env}|${tmpl}|${cpp}|${base_url}"
 resp_cache="$CACHE_DIR/cc-statusline-resp-$(printf '%s' "$cache_key" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12).json"
 
+# --- Focus detection: macOS osascript (fast, ~20ms). Unfocused → serve stale cache. --
+is_focused() {
+  if command -v osascript >/dev/null 2>&1; then
+    local app
+    app=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null)
+    # Blacklist: known non-interactive frontmost states (lock screen, screensaver, etc.)
+    case "$app" in
+      loginwindow|ScreenSaverEngine|"") return 1 ;;
+      *) return 0 ;;
+    esac
+  fi
+  return 0  # non-macOS: always consider focused
+}
+
 fetch_cached() {
   local now=$(date +%s)
   if [ -f "$resp_cache" ]; then
     local mtime=$(stat -f %m "$resp_cache" 2>/dev/null || stat -c %Y "$resp_cache" 2>/dev/null || echo 0)
     local age=$((now - mtime))
-    if [ "$age" -lt "$TTL" ]; then
+    if [ "$age" -lt "$TTL" ] || ! is_focused; then
       cat "$resp_cache"
       return 0
     fi
   fi
+  # If unfocused and no cache at all, bail (skip HTTP entirely)
+  if ! is_focused; then return 1; fi
   local body
   body=$(eval "$1" 2>/dev/null)
   [ -z "$body" ] && return 1

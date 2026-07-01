@@ -96,6 +96,33 @@ fi
 
 # --- Provider usage from ccswitch or env-based official detection (cached 60s) ---
 export CC_SESSION_ID=$(echo "$input" | jq -r '.session_id // empty')
+
+# --- Mid-session provider change detection ---
+# Cache env fingerprint on first run; if it changes later same session, warn the user.
+fp_cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}/cc-statusline-fp"
+fp_changed=""
+if [ -n "$CC_SESSION_ID" ]; then
+  fp_url=""; fp_key=""
+  if [ -n "$CCDB" ]; then
+    fp_url=$(sqlite3 "$CCDB" 2>/dev/null "SELECT json_extract(settings_config,'$.env.ANTHROPIC_BASE_URL') FROM providers WHERE app_type='claude' AND is_current=1;")
+    fp_key=$(sqlite3 "$CCDB" 2>/dev/null "SELECT json_extract(settings_config,'$.env.ANTHROPIC_AUTH_TOKEN') FROM providers WHERE app_type='claude' AND is_current=1;")
+  fi
+  [ -z "$fp_url" ] && fp_url="${ANTHROPIC_BASE_URL:-}"
+  [ -z "$fp_key" ] && fp_key="${ANTHROPIC_AUTH_TOKEN:-${ANTHROPIC_API_KEY:-}}"
+  fp=$(printf '%s|%s' "${fp_url:-}" "${fp_key:0:16}" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12)
+  if [ -n "$fp" ]; then
+    mkdir -p "$fp_cache_dir"
+    fp_file="$fp_cache_dir/${CC_SESSION_ID}"
+    if [ -f "$fp_file" ]; then
+      read -r fp_prev < "$fp_file"
+      [ "$fp" != "$fp_prev" ] && fp_changed="1"
+    else
+      printf '%s' "$fp" > "$fp_file"
+    fi
+  fi
+fi
+
+# warning marker rendered inline after model, before the next segment
 usage=$("$SCRIPT_DIR/statusline-usage.sh" 2>/dev/null)
 
 # --- Width-aware compression: skip entirely if real width unknown ---
@@ -173,6 +200,9 @@ fi
 
 # --- Render ---
 printf "\033[36m%s\033[0m" "$display_model"
+if [ -n "$fp_changed" ]; then
+  printf " \033[31m⚠\033[0m"
+fi
 printf " | "
 printf "\033[34m%s\033[0m" "$dir"
 if [ -n "$branch" ]; then
