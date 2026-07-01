@@ -19,7 +19,7 @@ if [ -z "$DB" ]; then
   done
 fi
 
-CACHE_DIR="${TMPDIR:-/tmp}"
+CACHE_DIR="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}"
 SESSION_DIR="${CC_SESSION_DIR:-$HOME/.cache/cc-statusline/sessions}"
 TTL=60
 CC_SESSION_ID="${CC_SESSION_ID:-}"
@@ -109,7 +109,7 @@ fi
 
 # --- API-response cache (keyed by pid+tmpl+cpp+base_url to avoid collisions) -
 cache_key="${pid:-env}|${tmpl}|${cpp}|${base_url}"
-resp_cache="$CACHE_DIR/cc-statusline-resp-$(printf '%s' "$cache_key" | shasum | cut -c1-12).json"
+resp_cache="$CACHE_DIR/cc-statusline-resp-$(printf '%s' "$cache_key" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12).json"
 
 fetch_cached() {
   local now=$(date +%s)

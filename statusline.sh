@@ -63,9 +63,9 @@ fi
 transcript=$(echo "$input" | jq -r '.transcript_path // empty')
 tk=""
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-  cache_dir="${TMPDIR:-/tmp}"
+  cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}"
   sig=$(stat -f "%m.%z" "$transcript" 2>/dev/null || stat -c "%Y.%s" "$transcript" 2>/dev/null)
-  cache="$cache_dir/cc-statusline-tk-$(echo "$transcript" | shasum 2>/dev/null | cut -c1-12 || echo hash)"
+  cache="$cache_dir/cc-statusline-tk-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
   if [ -f "$cache" ] && [ "$(head -1 "$cache" 2>/dev/null)" = "$sig" ]; then
     tk=$(tail -n +2 "$cache")
   else
