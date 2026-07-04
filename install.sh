@@ -67,11 +67,16 @@ fi
 
 printf '\n\033[32mDone.\033[0m Restart Claude Code (or run /statusline in the prompt) to see the new line.\n\n'
 cat <<EOF
-Examples of what you'll see:
+Examples of what you'll see (two lines: info on top, path/branch below):
 
-  glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
-  DeepSeek deepseek-chat | ~/proj | main | ctx 8% | tk 540k | cache 92% | ¥71.16
-  claude-sonnet-4-6 | ~/proj | main | ctx 5% | tk 12k | cache 0% | \$1.23 used \$5.00
+  glm-5.2 | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
+  ~/proj | main
+
+  DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16
+  ~/proj | main
+
+  claude-sonnet-4-6 | ctx 5% | tk 12k | cache 0% | \$1.23 used \$5.00
+  ~/proj | main
 
 If you use ccswitch: it overwrites settings.json on every provider switch. Add
 the statusLine snippet to each provider (or to ccswitch's common config):

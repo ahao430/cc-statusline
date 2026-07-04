@@ -3,10 +3,14 @@
 Claude Code 的增强状态栏：模型 · 目录 · git 分支 · 上下文占比（超量告警）· **本次会话 token + 缓存命中率** · **渠道用量**（智谱 / Kimi / MiniMax / ZenMux / DeepSeek / StepFun / SiliconFlow / OpenRouter / Novita / newapi 中转站），余额类渠道还会显示 **本次会话消耗**。
 
 ```
-智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
-智谱 glm-5.2 | ~/proj | main | ctx 12% | tk 2.1M | cache 87% | 5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h
-DeepSeek deepseek-chat | ~/proj | main | ctx 8% | tk 540k | cache 92% | ¥71.16 本次 -¥0.45
-claude-sonnet-4-6 | ~/proj | main | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | $1.23 used $5.00 本次 +$0.12
+智谱 glm-5.2 | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
+~/proj | main
+智谱 glm-5.2 | ctx 12% | tk 2.1M | cache 87% | 5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h
+~/proj | main
+DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16 本次 -¥0.45
+~/proj | main
+claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | $1.23 used $5.00 本次 +$0.12
+~/proj | main
 ```
 
 ## 功能

@@ -1,6 +1,7 @@
 #!/bin/bash
-# Claude Code status line:
-#   model | dir | git branch | ctx% | session tokens + cache hit | provider usage
+# Claude Code status line (two lines):
+#   line 1: model | ctx% | session tokens + cache hit | provider usage
+#   line 2: dir | git branch
 # Designed to run as the command of Claude Code's statusLine setting.
 set -u
 
@@ -164,26 +165,22 @@ is_pos_int() {
 cols=""
 if is_pos_int "${COLUMNS:-}" && [ "${COLUMNS}" -ge 40 ]; then cols="${COLUMNS}"; fi
 
+# Width-aware compression targets line 2 only (dir + branch).
+# Line 1 (model | ctx | tk | usage) is naturally short and stays complete.
 if [ -n "$cols" ]; then
-  total=0; nparts=0
-  for s in "$display_model" "$dir" "$branch" "$ctx" "$tk" "$usage"; do
+  total2=0; nparts2=0
+  for s in "$dir" "$branch"; do
     [ -z "$s" ] && continue
-    total=$((total + $(cell_width "$s")))
-    nparts=$((nparts + 1))
+    total2=$((total2 + $(cell_width "$s")))
+    nparts2=$((nparts2 + 1))
   done
-  total=$((total + 3 * (nparts > 0 ? nparts - 1 : 0)))
+  total2=$((total2 + 3 * (nparts2 > 0 ? nparts2 - 1 : 0)))
 
-  if [ "$total" -gt "$cols" ]; then
-    fixed=0
-    for s in "$display_model" "$ctx" "$tk" "$usage"; do
-      [ -z "$s" ] && continue
-      fixed=$((fixed + $(cell_width "$s")))
-    done
-
+  if [ "$total2" -gt "$cols" ]; then
     if [ -n "$branch" ]; then
-      pair_budget=$(( cols - fixed - 6 ))   # 2 separators on each side of the pair
+      pair_budget=$(( cols - 3 ))   # 1 separator between dir and branch
     else
-      pair_budget=$(( cols - fixed - 3 ))   # 1 separator on each side
+      pair_budget="$cols"
     fi
     [ "$pair_budget" -lt 8 ] && pair_budget=8
 
@@ -199,15 +196,11 @@ if [ -n "$cols" ]; then
 fi
 
 # --- Render ---
+# Line 1: model | ctx | tk | usage  — kept complete so usage info never gets truncated.
+# Line 2: dir | branch              — gives long paths / branch names the full width.
 printf "\033[36m%s\033[0m" "$display_model"
 if [ -n "$fp_changed" ]; then
   printf " \033[31m⚠\033[0m"
-fi
-printf " | "
-printf "\033[34m%s\033[0m" "$dir"
-if [ -n "$branch" ]; then
-  printf " | "
-  printf "\033[35m%s\033[0m" "$branch"
 fi
 if [ -n "$ctx" ]; then
   printf " | "
@@ -220,4 +213,14 @@ fi
 if [ -n "$usage" ]; then
   printf " | "
   printf "\033[36m%s\033[0m" "$usage"
+fi
+if [ -n "$dir" ] || [ -n "$branch" ]; then
+  printf "\n"
+  if [ -n "$dir" ]; then
+    printf "\033[34m%s\033[0m" "$dir"
+    [ -n "$branch" ] && printf " | "
+  fi
+  if [ -n "$branch" ]; then
+    printf "\033[35m%s\033[0m" "$branch"
+  fi
 fi
