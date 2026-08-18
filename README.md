@@ -18,7 +18,7 @@ claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | 余额$5.00 �
 - **模型** —— 当前 Claude Code 模型名；当激活的 baseURL 命中官方端点时，自动加 `智谱 ` / `DeepSeek ` 前缀。
 - **目录 & git 分支** —— 当前目录（`~` 缩写）+ git 分支（依次尝试 `current_dir` → `project_dir` → `$PWD`）。
 - **局域网 IP** —— 第二行末尾显示本机 LAN IP（启动时获取一次并按会话缓存；macOS 用 `ipconfig`，Linux 用 `ifconfig` / `ip addr`）。
-- **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。非官方渠道下 Claude Code 报的 `used_percentage` 恒为 0，此时回退用 transcript 里最近一次非零 API 调用的输入 token ÷ 上下文窗口大小估算。窗口大小：读 ccswitch 当前 provider 配置，模型 id 带 `[1M]` 后缀的（如 `glm-5.2[1M]`，GLM / Claude / GPT 均适用）按 1M；无 ccswitch 时按 GLM 版本号兜底（5.1+ = 1M）；其余按 Claude Code 报的值（默认 200k）；可用 `CC_CONTEXT_WINDOW` 覆盖。
+- **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。非官方渠道下 Claude Code 报的 `used_percentage` 恒为 0，此时回退用 transcript 里最近一次非零 API 调用的输入 token ÷ 上下文窗口大小估算。窗口大小：① 内置已知模型精确窗口（GPT 5.4+ = 1.05M、`gpt-5.3-codex` = 400k；Claude Opus/Sonnet 4.6+/5/Fable 5、DeepSeek V4、GLM 5.1–5.3、MiniMax M3 = 1M）；② 读 ccswitch 配置，模型 id 带 `[1M]` 后缀的按 1M；③ 其余按 Claude Code 报的值（默认 200k）；可用 `CC_CONTEXT_WINDOW` 覆盖。
 - **会话 token** —— 从 transcript 累加 `input + cache_creation + cache_read + output`，附带缓存命中率。
 - **渠道用量** —— 按当前渠道拉取：
   - **套餐类（token_plan）**：每个窗口显示为 `剩 N% ██████ 1h33m` —— 剩余百分比、颜色进度条（用量 <60% 绿、<85% 黄、≥85% 红）、倒计时。多窗口时加标签：`5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`。支持：

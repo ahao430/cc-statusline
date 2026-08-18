@@ -47,18 +47,26 @@ if [ -n "${CC_CONTEXT_WINDOW:-}" ]; then
   cw_size="$CC_CONTEXT_WINDOW"
 else
   model_id=$(echo "$input" | jq -r '.model.id // .model.display_name // ""')
-  is_1m=0
-  if [ -n "$cc_cfg" ]; then
+  mid=$(echo "$model_id" | tr '[:upper:]' '[:lower:]')
+  cw_set=0
+  # 1) Authoritative model list (exact context windows). GPT 5.4+ = 1.05M;
+  #    gpt-5.3-codex = 400k; Claude / DeepSeek / GLM / MiniMax 1M models = 1M.
+  case "$mid" in
+    gpt-5.3-codex|gpt-5.3-codex-*) cw_size=400000; cw_set=1 ;;
+    gpt-5.4|gpt-5.4-*|gpt-5.5|gpt-5.5-*|gpt-5.6|gpt-5.6-*) cw_size=1050000; cw_set=1 ;;
+    claude-fable-5|claude-fable-5-*|claude-opus-5|claude-opus-5-*|claude-sonnet-5|claude-sonnet-5-*|claude-opus-4-6|claude-opus-4-6-*|claude-opus-4-7|claude-opus-4-7-*|claude-opus-4-8|claude-opus-4-8-*|claude-sonnet-4-6|claude-sonnet-4-6-*) cw_size=1000000; cw_set=1 ;;
+    deepseek-v4-pro|deepseek-v4-pro-*|deepseek-v4-flash|deepseek-v4-flash-*) cw_size=1000000; cw_set=1 ;;
+    glm-5.1|glm-5.1-*|glm-5.2|glm-5.2-*|glm-5.3|glm-5.3-*) cw_size=1000000; cw_set=1 ;;
+    minimax-m3|minimax-m3-*) cw_size=1000000; cw_set=1 ;;
+  esac
+  # 2) Fallback: ccswitch config tags 1M models with a [1M] suffix on the id
+  #    (catches models not in the list above).
+  if [ "$cw_set" -eq 0 ] && [ -n "$cc_cfg" ]; then
     echo "$cc_cfg" | jq -e --arg m "$model_id" '
       [.env.ANTHROPIC_MODEL, .env.ANTHROPIC_DEFAULT_FABLE_MODEL, .env.ANTHROPIC_DEFAULT_SONNET_MODEL, .env.ANTHROPIC_DEFAULT_OPUS_MODEL, .env.ANTHROPIC_DEFAULT_HAIKU_MODEL]
       | any(. == ($m + "[1M]") or . == ($m + "[1m]"))
-    ' >/dev/null 2>&1 && is_1m=1
+    ' >/dev/null 2>&1 && { cw_size=1000000; cw_set=1; }
   fi
-  if [ "$is_1m" -eq 0 ] && echo "$model_id" | grep -qE '^glm-[0-9]+\.[0-9]+' && \
-     echo "$model_id" | awk -F'[-.]' '{exit !(($2>5)||($2==5&&$3>=1))}'; then
-    is_1m=1
-  fi
-  [ "$is_1m" -eq 1 ] && cw_size=1000000
 fi
 
 dir_raw=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
@@ -90,7 +98,7 @@ ctx_pct=""
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}"
   sig=$(stat -f "%m.%z" "$transcript" 2>/dev/null || stat -c "%Y.%s" "$transcript" 2>/dev/null)
-  cache="$cache_dir/cc-statusline-tk4-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
+  cache="$cache_dir/cc-statusline-tk5-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
   if [ -f "$cache" ] && [ "$(head -1 "$cache" 2>/dev/null)" = "$sig" ]; then
     tk=$(sed -n '2p' "$cache" 2>/dev/null)
     ctx_pct=$(sed -n '3p' "$cache" 2>/dev/null)
