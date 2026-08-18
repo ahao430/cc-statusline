@@ -18,8 +18,8 @@ claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | 余额$5.00 �
 - **模型** —— 当前 Claude Code 模型名；当激活的 baseURL 命中官方端点时，自动加 `智谱 ` / `DeepSeek ` 前缀。
 - **目录 & git 分支** —— 当前目录（`~` 缩写）+ git 分支（依次尝试 `current_dir` → `project_dir` → `$PWD`）。
 - **局域网 IP** —— 第二行末尾显示本机 LAN IP（启动时获取一次并按会话缓存；macOS 用 `ipconfig`，Linux 用 `ifconfig` / `ip addr`）。
-- **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。非官方渠道下 Claude Code 报的 `used_percentage` 恒为 0，此时回退用 transcript 里最近一次非零 API 调用的输入 token ÷ 上下文窗口大小估算。窗口大小：① 内置已知模型精确窗口（GPT 5.4+ = 1.05M、`gpt-5.3-codex` = 400k；Claude Opus/Sonnet 4.6+/5/Fable 5、DeepSeek V4、GLM 5.1–5.3、MiniMax M3 = 1M）；② 读 ccswitch 配置，模型 id 带 `[1M]` 后缀的按 1M；③ 其余按 Claude Code 报的值（默认 200k）；可用 `CC_CONTEXT_WINDOW` 覆盖。
-- **会话 token** —— 从 transcript 累加 `input + cache_creation + cache_read + output`，附带缓存命中率。
+- **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。优先用 Claude Code 的 `total_input_tokens`（来自大模型响应的 usage）÷ 正确窗口大小；**不用 `used_percentage`**（Claude Code 对非官方模型固定按 200k 算分母，1M 模型会算错）。`total_input_tokens` 为 0 时回退用 transcript 里最近一次非零 API 调用的输入 token 估算。窗口大小：① 内置已知模型精确窗口（GPT 5.4+ = 1.05M、`gpt-5.3-codex` = 400k；Claude Opus/Sonnet 4.6+/5/Fable 5、DeepSeek V4、GLM 5.1–5.3、MiniMax M3 = 1M）；② 读 ccswitch 配置，模型 id 带 `[1M]` 后缀的按 1M；③ 其余按 Claude Code 报的值（默认 200k）；可用 `CC_CONTEXT_WINDOW` 覆盖。若最近连续多条 API 调用 usage 全 0（如网关未回传 usage），`ctx` 显示 `-` 表示数据停滞。
+- **会话 token** —— 从 transcript 累加 `input + cache_creation + cache_read + output`，附带缓存命中率。同样地，usage 全 0 时 `tk` 显示 `-`。
 - **渠道用量** —— 按当前渠道拉取：
   - **套餐类（token_plan）**：每个窗口显示为 `剩 N% ██████ 1h33m` —— 剩余百分比、颜色进度条（用量 <60% 绿、<85% 黄、≥85% 红）、倒计时。多窗口时加标签：`5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h`。支持：
     - **智谱 GLM Coding Plan**（`bigmodel.cn` / `z.ai`）—— TOKENS_LIMIT 窗口（5h + 周）

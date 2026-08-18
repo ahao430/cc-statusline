@@ -84,9 +84,11 @@ for d in "$project_dir" "$dir_raw" "${PWD:-}"; do
   branch=$(git -C "$d" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null) && [ -n "$branch" ] && break
 done
 
-# Context %: prefer Claude Code's used_percentage; the tk block below provides a
-# transcript-derived fallback (used_percentage reads 0 on some non-official providers).
-used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
+# Context %: prefer Claude Code's total_input_tokens (sourced from the model's
+# usage response) recomputed with the correct window — used_percentage itself
+# is divided by 200000 for non-official models, so it's wrong for 1M models.
+# The tk block below provides a transcript-derived fallback when that's 0.
+cc_total_in=$(echo "$input" | jq -r '.context_window.total_input_tokens // empty')
 ctx=""
 ctx_color='\033[32m'
 
@@ -98,18 +100,19 @@ ctx_pct=""
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}"
   sig=$(stat -f "%m.%z" "$transcript" 2>/dev/null || stat -c "%Y.%s" "$transcript" 2>/dev/null)
-  cache="$cache_dir/cc-statusline-tk5-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
+  cache="$cache_dir/cc-statusline-tk6-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
   if [ -f "$cache" ] && [ "$(head -1 "$cache" 2>/dev/null)" = "$sig" ]; then
     tk=$(sed -n '2p' "$cache" 2>/dev/null)
     ctx_pct=$(sed -n '3p' "$cache" 2>/dev/null)
+    stale=$(sed -n '4p' "$cache" 2>/dev/null)
   else
-    # $5 = last non-zero row's (input + cache_creation + cache_read) = current context size.
-    # (Recent entries often report 0 usage for tool calls / empty responses, so skip those.)
-    read inp ccin ccrd out last_in <<< $(jq -r '
+    # $5 = last non-zero row's input total (current context size); $6 = trailing
+    # zero-count (consecutive 0-usage entries at the end → provider not reporting).
+    read inp ccin ccrd out last_in trail_zero <<< $(jq -r '
       select(.message.usage) |
       .message.usage |
       "\(.input_tokens // 0) \(.cache_creation_input_tokens // 0) \(.cache_read_input_tokens // 0) \(.output_tokens // 0)"' \
-      "$transcript" 2>/dev/null | awk '{a+=$1;b+=$2;c+=$3;d+=$4; if(($1+$2+$3)>0) la=($1+$2+$3)} END {printf "%d %d %d %d %d", a, b, c, d, la+0}')
+      "$transcript" 2>/dev/null | awk '{a+=$1;b+=$2;c+=$3;d+=$4; v=($1+$2+$3); if(v>0){la=v; tz=0} else {tz++}} END {printf "%d %d %d %d %d %d", a, b, c, d, la+0, tz+0}')
     if [ -n "$inp" ]; then
       total=$((inp + ccin + ccrd + out))
       denom=$((inp + ccin + ccrd))
@@ -127,16 +130,28 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
       if [ -n "$last_in" ] && [ "$last_in" -gt 0 ]; then
         ctx_pct=$(awk -v n="$last_in" -v s="$cw_size" 'BEGIN { p=n*100/s; if(p<0)p=0; if(p>100)p=100; printf "%.0f", p }')
       fi
-      printf '%s\n%s\n%s' "$sig" "$tk" "$ctx_pct" > "$cache"
+      # Stale: last 2+ usage entries all 0 → upstream isn't returning usage data
+      stale=0
+      [ -n "$trail_zero" ] && [ "$trail_zero" -ge 2 ] && stale=1
+      printf '%s\n%s\n%s\n%s' "$sig" "$tk" "$ctx_pct" "$stale" > "$cache"
     fi
   fi
 fi
 
-# Resolve ctx: use Claude Code's used_percentage when populated (>0), else the
-# transcript-derived ctx_pct.
+# When usage data is stale (provider returning 0), show honest placeholders
+# instead of a frozen old value.
+if [ "${stale:-0}" -eq 1 ]; then
+  tk="tk -"
+fi
+
+# Resolve ctx: prefer Claude Code's total_input_tokens (from the model) ÷ correct
+# window; then the transcript-derived ctx_pct; show "ctx -" when stale.
 final_ctx=""
-if [ -n "$used_pct" ] && [ "$used_pct" != "0" ] && [ "$used_pct" != "0.0" ]; then
-  final_ctx="$used_pct"
+if [ -n "$cc_total_in" ] && [ "$cc_total_in" -gt 0 ] 2>/dev/null; then
+  final_ctx=$(awk -v n="$cc_total_in" -v s="$cw_size" 'BEGIN { p=n*100/s; if(p<0)p=0; if(p>100)p=100; printf "%.0f", p }')
+elif [ "${stale:-0}" -eq 1 ]; then
+  ctx="ctx -"
+  ctx_color='\033[2m'
 elif [ -n "$ctx_pct" ]; then
   final_ctx="$ctx_pct"
 fi
