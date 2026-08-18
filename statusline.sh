@@ -126,6 +126,39 @@ fi
 # warning marker rendered inline after model, before the next segment
 usage=$("$SCRIPT_DIR/statusline-usage.sh" 2>/dev/null)
 
+# --- LAN IP (cached per session; fetched once at startup) ---
+get_lan_ip() {
+  if command -v ipconfig >/dev/null 2>&1; then
+    local ip=$(ipconfig getifaddr en0 2>/dev/null)
+    [ -z "$ip" ] && ip=$(ipconfig getifaddr en1 2>/dev/null)
+    [ -n "$ip" ] && { printf '%s' "$ip"; return; }
+  fi
+  if command -v ifconfig >/dev/null 2>&1; then
+    local ip=$(ifconfig 2>/dev/null | awk '/inet / && $2 != "127.0.0.1" {print $2}' | head -1)
+    [ -n "$ip" ] && { printf '%s' "$ip"; return; }
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    local ip=$(ip -4 addr 2>/dev/null | awk '/inet / && !/127.0.0.1/ {print $2}' | cut -d/ -f1 | head -1)
+    [ -n "$ip" ] && printf '%s' "$ip"
+  fi
+}
+lan_ip=""
+if [ -n "$CC_SESSION_ID" ]; then
+  ip_cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}/cc-statusline-ip"
+  ip_file="$ip_cache_dir/${CC_SESSION_ID}"
+  if [ -f "$ip_file" ]; then
+    lan_ip=$(cat "$ip_file" 2>/dev/null)
+  else
+    lan_ip=$(get_lan_ip)
+    if [ -n "$lan_ip" ]; then
+      mkdir -p "$ip_cache_dir" 2>/dev/null
+      printf '%s' "$lan_ip" > "$ip_file"
+    fi
+  fi
+else
+  lan_ip=$(get_lan_ip)
+fi
+
 # --- Width-aware compression: skip entirely if real width unknown ---
 # Strip ANSI escape sequences for accurate width measurement.
 strip_ansi() {
@@ -165,22 +198,25 @@ is_pos_int() {
 cols=""
 if is_pos_int "${COLUMNS:-}" && [ "${COLUMNS}" -ge 40 ]; then cols="${COLUMNS}"; fi
 
-# Width-aware compression targets line 2 only (dir + branch).
+# Width-aware compression targets line 2 only (dir + branch + lan_ip).
 # Line 1 (model | ctx | tk | usage) is naturally short and stays complete.
+# lan_ip is never truncated (truncated IPs are meaningless); dir/branch shrink instead.
 if [ -n "$cols" ]; then
+  ip_w=0
+  [ -n "$lan_ip" ] && ip_w=$(( $(cell_width "$lan_ip") + 3 ))  # " | " separator
   total2=0; nparts2=0
   for s in "$dir" "$branch"; do
     [ -z "$s" ] && continue
     total2=$((total2 + $(cell_width "$s")))
     nparts2=$((nparts2 + 1))
   done
-  total2=$((total2 + 3 * (nparts2 > 0 ? nparts2 - 1 : 0)))
+  total2=$((total2 + 3 * (nparts2 > 0 ? nparts2 - 1 : 0) + ip_w))
 
   if [ "$total2" -gt "$cols" ]; then
     if [ -n "$branch" ]; then
-      pair_budget=$(( cols - 3 ))   # 1 separator between dir and branch
+      pair_budget=$(( cols - 3 - ip_w ))   # 1 separator between dir and branch, +ip reserved
     else
-      pair_budget="$cols"
+      pair_budget=$(( cols - ip_w ))
     fi
     [ "$pair_budget" -lt 8 ] && pair_budget=8
 
@@ -197,7 +233,7 @@ fi
 
 # --- Render ---
 # Line 1: model | ctx | tk | usage  — kept complete so usage info never gets truncated.
-# Line 2: dir | branch              — gives long paths / branch names the full width.
+# Line 2: dir | branch | lan_ip     — gives long paths / branch names the full width.
 printf "\033[36m%s\033[0m" "$display_model"
 if [ -n "$fp_changed" ]; then
   printf " \033[31m⚠\033[0m"
@@ -214,13 +250,17 @@ if [ -n "$usage" ]; then
   printf " | "
   printf "\033[36m%s\033[0m" "$usage"
 fi
-if [ -n "$dir" ] || [ -n "$branch" ]; then
+if [ -n "$dir" ] || [ -n "$branch" ] || [ -n "$lan_ip" ]; then
   printf "\n"
   if [ -n "$dir" ]; then
     printf "\033[34m%s\033[0m" "$dir"
-    [ -n "$branch" ] && printf " | "
   fi
   if [ -n "$branch" ]; then
+    [ -n "$dir" ] && printf " | "
     printf "\033[35m%s\033[0m" "$branch"
+  fi
+  if [ -n "$lan_ip" ]; then
+    { [ -n "$dir" ] || [ -n "$branch" ]; } && printf " | "
+    printf "\033[2m%s\033[0m" "$lan_ip"
   fi
 fi

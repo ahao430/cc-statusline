@@ -4,19 +4,20 @@ Claude Code 的增强状态栏：模型 · 目录 · git 分支 · 上下文占�
 
 ```
 智谱 glm-5.2 | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
-~/proj | main
+~/proj | main | 192.168.1.5
 智谱 glm-5.2 | ctx 12% | tk 2.1M | cache 87% | 5h 剩 53% ████ 1h33m · 周 剩 78% ████████ 4d12h
-~/proj | main
+~/proj | main | 192.168.1.5
 DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16 本次 -¥0.45
-~/proj | main
+~/proj | main | 192.168.1.5
 claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | 余额$5.00 消耗$1.23 本次 +$0.12
-~/proj | main
+~/proj | main | 192.168.1.5
 ```
 
 ## 功能
 
 - **模型** —— 当前 Claude Code 模型名；当激活的 baseURL 命中官方端点时，自动加 `智谱 ` / `DeepSeek ` 前缀。
 - **目录 & git 分支** —— 当前目录（`~` 缩写）+ git 分支（依次尝试 `current_dir` → `project_dir` → `$PWD`）。
+- **局域网 IP** —— 第二行末尾显示本机 LAN IP（启动时获取一次并按会话缓存；macOS 用 `ipconfig`，Linux 用 `ifconfig` / `ip addr`）。
 - **上下文占比** —— 上下文窗口使用率，超过 60% 时变红并提示 `⚠ 请压缩`。
 - **会话 token** —— 从 transcript 累加 `input + cache_creation + cache_read + output`，附带缓存命中率。
 - **渠道用量** —— 按当前渠道拉取：

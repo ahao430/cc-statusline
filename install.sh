@@ -70,13 +70,13 @@ cat <<EOF
 Examples of what you'll see (two lines: info on top, path/branch below):
 
   glm-5.2 | ctx 12% | tk 2.1M | cache 87% | 剩 53% ██████ 1h33m
-  ~/proj | main
+  ~/proj | main | 192.168.1.5
 
   DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16
-  ~/proj | main
+  ~/proj | main | 192.168.1.5
 
   claude-sonnet-4-6 | ctx 5% | tk 12k | cache 0% | 余额$5.00 消耗$1.23
-  ~/proj | main
+  ~/proj | main | 192.168.1.5
 
 If you use ccswitch: it overwrites settings.json on every provider switch. Add
 the statusLine snippet to each provider (or to ccswitch's common config):
