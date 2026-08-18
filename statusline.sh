@@ -50,33 +50,32 @@ for d in "$project_dir" "$dir_raw" "${PWD:-}"; do
   branch=$(git -C "$d" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null) && [ -n "$branch" ] && break
 done
 
-used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
+# Context %: prefer Claude Code's used_percentage; the tk block below provides a
+# transcript-derived fallback (used_percentage reads 0 on some non-official providers).
+used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 ctx=""
 ctx_color='\033[32m'
-if [ -n "$used" ]; then
-  if awk -v u="$used" 'BEGIN { exit !(u >= 60) }'; then
-    ctx=$(printf "ctx %.0f%% ⚠ 请压缩" "$used")
-    ctx_color='\033[31m'
-  else
-    ctx=$(printf "ctx %.0f%%" "$used")
-  fi
-fi
 
 # --- Session token accounting from transcript (cached by file mtime+size) ---
+# Also derives a fallback context % from the last API call's input tokens.
 transcript=$(echo "$input" | jq -r '.transcript_path // empty')
 tk=""
+ctx_pct=""
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}"
   sig=$(stat -f "%m.%z" "$transcript" 2>/dev/null || stat -c "%Y.%s" "$transcript" 2>/dev/null)
-  cache="$cache_dir/cc-statusline-tk-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
+  cache="$cache_dir/cc-statusline-tk2-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
   if [ -f "$cache" ] && [ "$(head -1 "$cache" 2>/dev/null)" = "$sig" ]; then
-    tk=$(tail -n +2 "$cache")
+    tk=$(sed -n '2p' "$cache" 2>/dev/null)
+    ctx_pct=$(sed -n '3p' "$cache" 2>/dev/null)
   else
-    read inp ccin ccrd out <<< $(jq -r '
+    # $5 = last non-zero row's (input + cache_creation + cache_read) = current context size.
+    # (Recent entries often report 0 usage for tool calls / empty responses, so skip those.)
+    read inp ccin ccrd out last_in <<< $(jq -r '
       select(.message.usage) |
       .message.usage |
       "\(.input_tokens // 0) \(.cache_creation_input_tokens // 0) \(.cache_read_input_tokens // 0) \(.output_tokens // 0)"' \
-      "$transcript" 2>/dev/null | awk '{a+=$1;b+=$2;c+=$3;d+=$4} END {printf "%d %d %d %d", a, b, c, d}')
+      "$transcript" 2>/dev/null | awk '{a+=$1;b+=$2;c+=$3;d+=$4; if(($1+$2+$3)>0) la=($1+$2+$3)} END {printf "%d %d %d %d %d", a, b, c, d, la+0}')
     if [ -n "$inp" ]; then
       total=$((inp + ccin + ccrd + out))
       denom=$((inp + ccin + ccrd))
@@ -90,8 +89,30 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
       else                                htk="${total}"
       fi
       tk=$(printf "tk %s \033[2m|\033[0m cache %s%%" "$htk" "$hit")
-      printf '%s\n%s' "$sig" "$tk" > "$cache"
+      # Fallback context %: last API call's input tokens ÷ context_window_size
+      if [ -n "$last_in" ] && [ "$last_in" -gt 0 ]; then
+        cw_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+        ctx_pct=$(awk -v n="$last_in" -v s="$cw_size" 'BEGIN { p=n*100/s; if(p<0)p=0; if(p>100)p=100; printf "%.0f", p }')
+      fi
+      printf '%s\n%s\n%s' "$sig" "$tk" "$ctx_pct" > "$cache"
     fi
+  fi
+fi
+
+# Resolve ctx: use Claude Code's used_percentage when populated (>0), else the
+# transcript-derived ctx_pct.
+final_ctx=""
+if [ -n "$used_pct" ] && [ "$used_pct" != "0" ] && [ "$used_pct" != "0.0" ]; then
+  final_ctx="$used_pct"
+elif [ -n "$ctx_pct" ]; then
+  final_ctx="$ctx_pct"
+fi
+if [ -n "$final_ctx" ]; then
+  if awk -v u="$final_ctx" 'BEGIN { exit !(u >= 60) }'; then
+    ctx=$(printf "ctx %.0f%% ⚠ 请压缩" "$final_ctx")
+    ctx_color='\033[31m'
+  else
+    ctx=$(printf "ctx %.0f%%" "$final_ctx")
   fi
 fi
 
