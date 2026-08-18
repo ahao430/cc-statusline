@@ -20,20 +20,46 @@ input=$(cat)
 
 model=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 
-# Detect official provider from ccswitch for model prefix tag
+# Detect official provider from ccswitch for model prefix tag. Fetch the full
+# settings_config once and reuse below for the 1M-context check.
 prefix=""
+cc_url=""
+cc_cfg=""
 if [ -n "$CCDB" ]; then
-  cc_url=$(sqlite3 "$CCDB" 2>/dev/null <<'SQL'
-SELECT json_extract(settings_config,'$.env.ANTHROPIC_BASE_URL')
-FROM providers WHERE app_type='claude' AND is_current=1;
-SQL
-)
-  case "$cc_url" in
-    *bigmodel.cn*|*z.ai*) prefix="智谱 " ;;
-    *deepseek.com*) prefix="DeepSeek " ;;
-  esac
+  cc_cfg=$(sqlite3 "$CCDB" 2>/dev/null "SELECT settings_config FROM providers WHERE app_type='claude' AND is_current=1;")
+  cc_url=$(echo "$cc_cfg" | jq -r '.env.ANTHROPIC_BASE_URL // empty' 2>/dev/null)
 fi
+[ -z "$cc_url" ] && cc_url="${ANTHROPIC_BASE_URL:-}"
+case "$cc_url" in
+  *bigmodel.cn*|*z.ai*) prefix="智谱 " ;;
+  *deepseek.com*) prefix="DeepSeek " ;;
+esac
 display_model="${prefix}${model}"
+
+# Effective context window for the ctx% fallback. Claude Code reports 200000 by
+# default, but non-official models differ. ccswitch tags 1M models with a [1M]
+# suffix on the model id (e.g. "glm-5.2[1M]"); check the current provider's
+# config for that marker (works for GLM / Claude / GPT alike). Fall back to
+# parsing GLM version (5.1+ = 1M) when ccswitch isn't available.
+# CC_CONTEXT_WINDOW overrides everything for other 1M models.
+cw_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
+if [ -n "${CC_CONTEXT_WINDOW:-}" ]; then
+  cw_size="$CC_CONTEXT_WINDOW"
+else
+  model_id=$(echo "$input" | jq -r '.model.id // .model.display_name // ""')
+  is_1m=0
+  if [ -n "$cc_cfg" ]; then
+    echo "$cc_cfg" | jq -e --arg m "$model_id" '
+      [.env.ANTHROPIC_MODEL, .env.ANTHROPIC_DEFAULT_FABLE_MODEL, .env.ANTHROPIC_DEFAULT_SONNET_MODEL, .env.ANTHROPIC_DEFAULT_OPUS_MODEL, .env.ANTHROPIC_DEFAULT_HAIKU_MODEL]
+      | any(. == ($m + "[1M]") or . == ($m + "[1m]"))
+    ' >/dev/null 2>&1 && is_1m=1
+  fi
+  if [ "$is_1m" -eq 0 ] && echo "$model_id" | grep -qE '^glm-[0-9]+\.[0-9]+' && \
+     echo "$model_id" | awk -F'[-.]' '{exit !(($2>5)||($2==5&&$3>=1))}'; then
+    is_1m=1
+  fi
+  [ "$is_1m" -eq 1 ] && cw_size=1000000
+fi
 
 dir_raw=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 case "$dir_raw" in
@@ -64,7 +90,7 @@ ctx_pct=""
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   cache_dir="${TMPDIR:-${TEMP:-${TMP:-/tmp}}}"
   sig=$(stat -f "%m.%z" "$transcript" 2>/dev/null || stat -c "%Y.%s" "$transcript" 2>/dev/null)
-  cache="$cache_dir/cc-statusline-tk2-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
+  cache="$cache_dir/cc-statusline-tk4-$(echo "$transcript" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -c1-12 || echo hash)"
   if [ -f "$cache" ] && [ "$(head -1 "$cache" 2>/dev/null)" = "$sig" ]; then
     tk=$(sed -n '2p' "$cache" 2>/dev/null)
     ctx_pct=$(sed -n '3p' "$cache" 2>/dev/null)
@@ -89,9 +115,8 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
       else                                htk="${total}"
       fi
       tk=$(printf "tk %s \033[2m|\033[0m cache %s%%" "$htk" "$hit")
-      # Fallback context %: last API call's input tokens ÷ context_window_size
+      # Fallback context %: last API call's input tokens ÷ effective context window
       if [ -n "$last_in" ] && [ "$last_in" -gt 0 ]; then
-        cw_size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
         ctx_pct=$(awk -v n="$last_in" -v s="$cw_size" 'BEGIN { p=n*100/s; if(p<0)p=0; if(p>100)p=100; printf "%.0f", p }')
       fi
       printf '%s\n%s\n%s' "$sig" "$tk" "$ctx_pct" > "$cache"
