@@ -414,12 +414,13 @@ case "$tmpl" in
     if [ -n "$start" ] && [ "$start" != "$used" ]; then
       delta_signed=$(awk -v c="$used" -v s="$start" -v sym="$sym" 'BEGIN {
         d = c - s
-        if (d > 0.001)      printf " \033[2m本次 +%s%.2f\033[0m", sym, d
-        else if (d < -0.001) printf " \033[2m本次 -%s%.2f\033[0m", sym, -d
+        if (d > 0.001)      printf " 本次 +%s%.2f", sym, d
+        else if (d < -0.001) printf " 本次 -%s%.2f", sym, -d
       }')
       delta_str="$delta_signed"
     fi
-    emit "$(printf "%s%.2f\033[2m used \033[0m%s%.2f%s" "$sym" "$used" "$sym" "$quota" "$delta_str")"
+    # 余额 (remaining quota) first and highlighted; 消耗 (used) + 本次 delta dim.
+    emit "$(printf "余额%s%.2f\033[2m 消耗%s%.2f%s\033[0m" "$sym" "$quota" "$sym" "$used" "$delta_str")"
     ;;
 esac
 

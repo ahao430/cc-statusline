@@ -9,7 +9,7 @@ Claude Code 的增强状态栏：模型 · 目录 · git 分支 · 上下文占�
 ~/proj | main
 DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16 本次 -¥0.45
 ~/proj | main
-claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | $1.23 used $5.00 本次 +$0.12
+claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | 余额$5.00 消耗$1.23 本次 +$0.12
 ~/proj | main
 ```
 
@@ -31,7 +31,7 @@ claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | $1.23 used $5.
     - **SiliconFlow CN/EN**（`api.siliconflow.cn` CNY / `api.siliconflow.com` USD）—— `.data.totalBalance`
     - **OpenRouter**（`openrouter.ai`）—— `total_credits - total_usage`（USD）
     - **NovitaAI**（`api.novita.ai`）—— `availableBalance / 10000`（原始单位 0.0001 USD）
-  - **newapi 中转站**（经 ccswitch 配置）：`$1.23 used $5.00 本次 +$0.12` —— 已用 / 总额（按渠道 `unit` 字段自动选货币符号，`CNY` → ¥、`USD` → $）+ 本次会话消耗。
+  - **newapi 中转站**（经 ccswitch 配置）：`余额$5.00 消耗$1.23 本次 +$0.12` —— 余额 / 消耗（按渠道 `unit` 字段自动选货币符号，`CNY` → ¥、`USD` → $）+ 本次会话消耗。
 
 ## 安装
 
@@ -41,7 +41,22 @@ claude-sonnet-4-6 | ctx 72% ⚠ 请压缩 | tk 480k | cache 90% | $1.23 used $5.
 curl -fsSL https://raw.githubusercontent.com/ahao430/cc-statusline/main/install.sh | bash
 ```
 
-会把 `statusline.sh` 和 `statusline-usage.sh` 拷到 `~/.claude/`、赋予执行权限，并把 `~/.claude/settings.json` 的 `statusLine` 字段指向脚本。
+会把 `statusline.sh` 和 `statusline-usage.sh` 拷到 `~/.claude/`、赋予执行权限，并把全局配置 `~/.claude/settings.json` 的 `statusLine` 字段指向脚本。
+
+### 手动配置到全局
+
+如果已经有脚本文件，也可以手动把 statusline 配到 Claude Code 全局配置 `~/.claude/settings.json`，这样所有项目都会生效：
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline.sh"
+  }
+}
+```
+
+如果 `~/.claude/settings.json` 里已经有其他配置，只需要合并新增 `statusLine` 字段，不要覆盖整个文件。
 
 ### 从克隆安装
 
@@ -69,7 +84,7 @@ Ubuntu/Debian：`sudo apt install jq sqlite3`
 
 ## ccswitch 用户注意事项
 
-ccswitch 每次切换渠道都会覆盖 `~/.claude/settings.json`，install.sh 写入的 statusLine 配置会被冲掉。请在 ccswitch 里给每个 Claude 渠道（或 ccswitch 的公共配置）加上这段：
+ccswitch 每次切换渠道都会覆盖 `~/.claude/settings.json`，install.sh 写入的 statusLine 配置会被冲掉。建议在 ccswitch 的“编辑通用配置”里加上这段，让所有 Claude 渠道共享；如果只想部分渠道启用，也可以单独加到对应渠道配置：
 
 ```json
 "statusLine": { "type": "command", "command": "bash ~/.claude/statusline.sh" }

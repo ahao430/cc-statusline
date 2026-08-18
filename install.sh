@@ -75,7 +75,7 @@ Examples of what you'll see (two lines: info on top, path/branch below):
   DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16
   ~/proj | main
 
-  claude-sonnet-4-6 | ctx 5% | tk 12k | cache 0% | \$1.23 used \$5.00
+  claude-sonnet-4-6 | ctx 5% | tk 12k | cache 0% | 余额$5.00 消耗$1.23
   ~/proj | main
 
 If you use ccswitch: it overwrites settings.json on every provider switch. Add
