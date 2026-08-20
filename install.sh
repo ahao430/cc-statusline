@@ -26,8 +26,20 @@ ok "dependencies present"
 mkdir -p "$CLAUDE_DIR"
 
 # --- 3. Copy scripts ---------------------------------------------------------
-install -m 0755 "$SCRIPT_DIR/statusline.sh"        "$CLAUDE_DIR/statusline.sh"
-install -m 0755 "$SCRIPT_DIR/statusline-usage.sh"  "$CLAUDE_DIR/statusline-usage.sh"
+# In clone mode ($SCRIPT_DIR has the files) install those; in curl|bash mode
+# (piped, no local files) download the latest from main.
+fetch_script() {
+  local name="$1" dest="$2"
+  if [ -f "$SCRIPT_DIR/$name" ]; then
+    install -m 0755 "$SCRIPT_DIR/$name" "$dest"
+  else
+    curl -fsSL "https://raw.githubusercontent.com/ahao430/cc-statusline/main/$name" -o "$dest" \
+      || err "failed to download $name"
+    chmod 0755 "$dest"
+  fi
+}
+fetch_script statusline.sh        "$CLAUDE_DIR/statusline.sh"
+fetch_script statusline-usage.sh  "$CLAUDE_DIR/statusline-usage.sh"
 ok "scripts installed to $CLAUDE_DIR"
 
 # --- 4. Detect ccswitch DB (informational only) ------------------------------
@@ -75,7 +87,7 @@ Examples of what you'll see (two lines: info on top, path/branch below):
   DeepSeek deepseek-chat | ctx 8% | tk 540k | cache 92% | ¥71.16
   ~/proj | main | 192.168.1.5
 
-  claude-sonnet-4-6 | ctx 5% | tk 12k | cache 0% | 余额$5.00 消耗$1.23
+  claude-sonnet-4-6 | ctx 5% | tk 12k | cache 0% | 余额\$5.00 消耗\$1.23
   ~/proj | main | 192.168.1.5
 
 If you use ccswitch: it overwrites settings.json on every provider switch. Add
